@@ -1,0 +1,6 @@
+{
+  "name": "EduNexus - Digital Learning Portal",
+  "description": "An official digital learning portal featuring class materials, daily homework tracking, curriculum lesson plans, and interactive assessments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
