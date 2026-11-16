@@ -2,7 +2,7 @@
  * Unified Print Service for Exam & Assessment System
  * 
  * Provides reliable, cross-browser, iframe-compatible printing.
- * In sandboxed iframe environments (like AI Studio preview), native window.print()
+ * In sandboxed iframe environments, native window.print()
  * is restricted by browser security policies; this service intelligently delegates
  * to top-level printable tabs or direct Blob downloads without hanging UI spinners.
  */

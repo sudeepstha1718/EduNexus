@@ -298,7 +298,7 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
     });
   };
 
-  // Auto-generate Reference Solution and Rubric with Gemini AI
+  // Auto-generate Reference Solution and Rubric
   const handleGenerateAiSolution = async (index: number) => {
     const q = questions[index];
     if (!q.questionText.trim()) {
@@ -770,7 +770,7 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
                             onClick={() => handleGenerateAiSolution(idx)}
                             disabled={aiGeneratingIndex === idx || !q.questionText.trim()}
                             className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:opacity-80 bg-blue-500/10 border border-blue-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5 transition cursor-pointer disabled:opacity-40"
-                            title="Let Gemini AI draft the teacher solution and rubric for this prompt"
+                            title="Auto-draft the teacher solution and rubric for this prompt"
                           >
                             {aiGeneratingIndex === idx ? (
                               <>

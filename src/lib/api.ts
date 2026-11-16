@@ -414,7 +414,7 @@ export async function deleteQuiz(id: string): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete quiz');
 }
 
-// Generate teacher reference solution and rubric with Gemini AI
+// Generate teacher reference solution and rubric
 export async function generateAiSolution(payload: {
   questionText: string;
   type: string;

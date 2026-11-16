@@ -142,9 +142,9 @@ export const QuizReportModal: React.FC<QuizReportModalProps> = ({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-geist font-bold text-xs xs:text-sm sm:text-base text-[var(--ink)] truncate">Assessment Result &amp; AI Report</h2>
+                <h2 className="font-geist font-bold text-xs xs:text-sm sm:text-base text-[var(--ink)] truncate">Assessment Result &amp; Report</h2>
                 <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-[var(--surface)] text-[var(--accent)] border border-[var(--accent)]/30 shrink-0">
-                  <Sparkles className="w-3 h-3 text-[var(--accent)]" /> Evaluated by Gemini AI
+                  <Sparkles className="w-3 h-3 text-[var(--accent)]" /> Automated Evaluation
                 </span>
               </div>
               <p className="font-mono text-[10px] sm:text-[11px] text-[var(--ink-muted)] mt-0.5 truncate">
@@ -475,10 +475,10 @@ export const QuizReportModal: React.FC<QuizReportModalProps> = ({
                       </div>
                     )}
 
-                    {/* AI Teacher Explanation & Feedback */}
+                    {/* Evaluation Explanation & Feedback */}
                     <div className="bg-[var(--surface-higher)] border border-[var(--accent)]/20 p-3 rounded-lg space-y-1">
                       <div className="flex items-center gap-1.5 text-[var(--accent)] font-mono text-[9px] uppercase tracking-wider">
-                        <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" /> AI Teacher Feedback:
+                        <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" /> Evaluation Feedback:
                       </div>
                       <p className="text-xs text-[var(--ink)] leading-relaxed">
                         {q.feedback}

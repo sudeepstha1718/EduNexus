@@ -47,16 +47,11 @@ process.on('uncaughtException', (err) => {
 });
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
-// Gemini AI Client Initializer
+// Automated Evaluation API Client
 const geminiClient = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
-  },
 });
 
 // Increase payload limit for uploading binary files as base64 into PostgreSQL
@@ -202,7 +197,7 @@ function resolveGuestRollFallback(studentId: string): string {
   return '-';
 }
 
-// Bounded Gemini AI Concurrency Gate (prevents 429 overload when an entire class submits simultaneously)
+// Bounded Automated Evaluation Concurrency Gate (prevents 429 overload when an entire class submits simultaneously)
 let activeAiCalls = 0;
 const MAX_CONCURRENT_AI_CALLS = 6;
 
@@ -2230,7 +2225,7 @@ function getClassEducationalProfile(className: string, section?: string, descrip
   };
 }
 
-// Canonical Fallback deterministic grading algorithm if Gemini is unavailable or times out
+// Canonical fallback deterministic grading algorithm if automated grading is unavailable or times out
 function calculateFallbackEvaluation(
   quiz: any,
   questions: any[],
@@ -2499,7 +2494,7 @@ app.post('/api/quizzes/evaluate', async (req, res) => {
       };
     });
 
-    // Determine whether this quiz actually contains descriptive open-ended questions requiring Gemini AI.
+    // Determine whether this quiz actually contains descriptive open-ended questions requiring automated evaluation.
     // 100% objective tests (MCQ, True/False, Fill Blanks, Match Following, MCQ sub-questions) grade instantaneously in ~2ms!
     const hasDescriptiveQuestions = evaluationQuestions.some((eq) => {
       if (Array.isArray(eq.subQuestions) && eq.subQuestions.length > 0) {
@@ -2609,7 +2604,7 @@ Also provide: totalScore, maxScore, percentage, gradeLetter, overallFeedback, st
           evaluationResult = JSON.parse(cleanText);
         }
       } catch (aiErr: any) {
-        console.warn('Gemini AI evaluation skipped/timed out, executing fast deterministic rubric engine:', aiErr?.message || aiErr);
+        console.warn('Automated descriptive evaluation skipped/timed out, executing fast deterministic rubric engine:', aiErr?.message || aiErr);
       }
     }
 

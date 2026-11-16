@@ -936,7 +936,7 @@ export const PrintAssessmentModal: React.FC<PrintAssessmentModalProps> = ({
         {/* MCQ Options with Dedicated Tick Boxes */}
         {q.type === 'mcq' && q.options && (
           imgUrl ? (
-            // Side-by-side diagram layout as in image_7994650a.png Q4, Q7, Q9, Q10
+            // Side-by-side diagram layout for questions with figures
             <div className="flex gap-2 items-center mt-1 w-full">
               <div className="w-[38%] shrink-0 flex items-center justify-center bg-white border border-slate-200 rounded p-1">
                 <img
