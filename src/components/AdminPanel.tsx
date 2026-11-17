@@ -61,7 +61,7 @@ interface AdminPanelProps {
   classes: ClassItem[];
   subjects: SubjectCategory[];
   quizzes?: QuizItem[];
-  onSaveFile: (file: FileItem) => void;
+  onSaveFile: (file: FileItem) => void | Promise<void>;
   onAddClass: (newClass: ClassItem) => void;
   onUpdateClass: (updatedClass: ClassItem) => void;
   onDeleteClass: (classId: string) => void;
@@ -75,6 +75,8 @@ interface AdminPanelProps {
   editingFile?: FileItem | null;
   onOpenSubmissions?: (studentNameOrId?: string, quizId?: string) => void;
   initialTab?: 'upload' | 'classes' | 'subjects' | 'students' | 'tests' | 'settings';
+  defaultClassId?: string;
+  defaultSubject?: string;
   adminName?: string;
   onAdminProfileUpdated?: (name: string, username: string) => void;
 }
@@ -99,6 +101,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   editingFile,
   onOpenSubmissions,
   initialTab = 'upload',
+  defaultClassId,
+  defaultSubject,
   adminName = 'Sudeep Shrestha',
   onAdminProfileUpdated,
 }) => {
@@ -299,11 +303,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const validSubjects = useMemo(
+    () => subjects.filter((s) => s.id !== 'all' && s.name.toLowerCase() !== 'all subjects'),
+    [subjects]
+  );
+
   // Upload Form states
   const [title, setTitle] = useState(editingFile?.title || '');
   const [description, setDescription] = useState(editingFile?.description || '');
-  const [classId, setClassId] = useState(editingFile?.classId || 'grade-9');
-  const [subject, setSubject] = useState(editingFile?.subject || 'Mathematics');
+  const [classId, setClassId] = useState(editingFile?.classId || defaultClassId || classes[0]?.id || 'all');
+  const [subject, setSubject] = useState(editingFile?.subject || validSubjects[0]?.name || '');
   const [uploadType, setUploadType] = useState<'file' | 'note' | 'link'>('file');
   const [uploaderName, setUploaderName] = useState(editingFile?.uploaderName || adminName || 'Sudeep Shrestha');
   const [isPinned, setIsPinned] = useState(editingFile?.isPinned || false);
@@ -311,6 +320,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [filePassword, setFilePassword] = useState(editingFile?.filePassword || '');
   const [externalUrl, setExternalUrl] = useState(editingFile?.externalUrl || '');
   const [noteText, setNoteText] = useState(editingFile?.fileDataUrl || '');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isSavingUpload, setIsSavingUpload] = useState<boolean>(false);
 
   // Auto-generate 4-digit PIN for file
   const generateRandomPin = () => {
@@ -320,6 +331,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   useEffect(() => {
+    setUploadError(null);
     if (editingFile) {
       setTitle(editingFile.title);
       setDescription(editingFile.description);
@@ -337,8 +349,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } else {
       setTitle('');
       setDescription('');
-      setClassId(classes[0]?.id || 'all');
-      setSubject(subjects[0]?.name || 'Mathematics');
+      const resolvedClass =
+        defaultClassId && defaultClassId !== 'all' && classes.some((c) => c.id === defaultClassId)
+          ? defaultClassId
+          : classes[0]?.id || 'all';
+      setClassId(resolvedClass);
+
+      const matchedSub =
+        defaultSubject && defaultSubject !== 'all' && defaultSubject.toLowerCase() !== 'all subjects'
+          ? validSubjects.find(
+              (s) =>
+                s.id.toLowerCase() === defaultSubject.toLowerCase() ||
+                s.name.toLowerCase() === defaultSubject.toLowerCase()
+            )
+          : undefined;
+      setSubject(matchedSub?.name || validSubjects[0]?.name || '');
       setUploadType('file');
       setUploaderName(adminName || 'Sudeep Shrestha');
       setIsPinned(false);
@@ -348,7 +373,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setNoteText('');
       setSelectedFile(null);
     }
-  }, [editingFile, isOpen, adminName]);
+  }, [editingFile, isOpen, adminName, defaultClassId, defaultSubject]);
+
+  // Keep selected subject synchronized with validSubjects (never leave it stuck on 'All Subjects' or empty)
+  useEffect(() => {
+    if (!isOpen || editingFile) return;
+    if (validSubjects.length === 0) {
+      if (subject !== '') setSubject('');
+      return;
+    }
+    const isCurrentValid = validSubjects.some((s) => s.name === subject || s.id === subject);
+    if (!subject || subject.toLowerCase() === 'all' || subject.toLowerCase() === 'all subjects' || !isCurrentValid) {
+      setSubject(validSubjects[0].name);
+    }
+  }, [isOpen, editingFile, validSubjects, subject]);
 
   // Selected binary file state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -427,8 +465,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleFileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setUploadError(null);
+
     if (!title.trim()) {
-      alert('Please enter a file/notice title.');
+      setUploadError('Please enter a file or notice title.');
+      return;
+    }
+
+    const resolvedSubject =
+      subject && subject.toLowerCase() !== 'all' && subject.toLowerCase() !== 'all subjects'
+        ? subject
+        : validSubjects[0]?.name || '';
+
+    if (!resolvedSubject) {
+      setUploadError('Please add at least one subject in the Subjects tab before publishing materials.');
       return;
     }
 
@@ -444,14 +494,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         fileSize = selectedFile.size;
         fileType = getFileTypeFromExtension(selectedFile.name);
         fileBlobId = `blob_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-        
-        // Save to IndexedDB
-        await saveFileBlob(fileBlobId, selectedFile);
 
-        // Also convert text/image/pdf to dataURL or text so preview works seamlessly
-        if (selectedFile.type.startsWith('image/') || selectedFile.type.includes('pdf') || selectedFile.size < 5000000) {
+        // Save locally to IndexedDB for fast admin preview
+        try {
+          await saveFileBlob(fileBlobId, selectedFile);
+        } catch (err) {
+          console.warn('IndexedDB local cache skipped:', err);
+        }
+
+        // Convert PDF, image, text, or files < 20MB to dataURL so students on all devices can open/download from PostgreSQL
+        const lowerName = selectedFile.name.toLowerCase();
+        const isPdfOrImage =
+          selectedFile.type.startsWith('image/') ||
+          selectedFile.type.includes('pdf') ||
+          lowerName.endsWith('.pdf') ||
+          /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(lowerName);
+
+        if (isPdfOrImage || selectedFile.size < 20000000) {
           try {
-            if (selectedFile.type.startsWith('text/') || selectedFile.name.endsWith('.txt') || selectedFile.name.endsWith('.md')) {
+            if (selectedFile.type.startsWith('text/') || lowerName.endsWith('.txt') || lowerName.endsWith('.md')) {
               fileDataUrl = await readFileAsText(selectedFile);
             } else {
               fileDataUrl = await readFileAsDataUrl(selectedFile);
@@ -465,7 +526,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         fileSize = editingFile.fileSize || 0;
         fileType = editingFile.fileType;
       } else {
-        alert('Please select a file to upload.');
+        setUploadError('Please choose a file to upload.');
         return;
       }
     } else if (uploadType === 'note') {
@@ -484,7 +545,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       title: title.trim(),
       description: description.trim(),
       classId,
-      subject,
+      subject: resolvedSubject,
       fileType,
       fileName,
       fileSize,
@@ -499,8 +560,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       downloadsCount: editingFile?.downloadsCount || 0,
     };
 
-    onSaveFile(newFileItem);
-    onClose();
+    setIsSavingUpload(true);
+    try {
+      await Promise.resolve(onSaveFile(newFileItem));
+      onClose();
+    } catch (err: any) {
+      setUploadError(err?.message || 'Failed to save material to database. Please try again.');
+    } finally {
+      setIsSavingUpload(false);
+    }
   };
 
   const handleCreateClass = (e: React.FormEvent) => {
@@ -821,16 +889,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     id="upload-subject-select"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-xs sm:text-sm font-semibold text-[var(--ink)] focus:outline-none focus:border-blue-500 shadow-2xs [&>option]:bg-[#191c24] [&>option]:text-slate-100"
                   >
-                    {subjects
-                      .filter((s) => s.id !== 'all')
-                      .map((s) => (
+                    {validSubjects.length === 0 ? (
+                      <option value="" disabled>
+                        No subjects added yet (add one in Subjects tab)
+                      </option>
+                    ) : (
+                      validSubjects.map((s) => (
                         <option key={s.id} value={s.name}>
                           {s.name}
                         </option>
-                      ))}
-                    <option value="Announcements">Announcements / Notices</option>
-                    <option value="Exam Papers">Exam &amp; Practice Papers</option>
-                    <option value="Other">Other / General</option>
+                      ))
+                    )}
+                    {editingFile &&
+                      editingFile.subject &&
+                      editingFile.subject.toLowerCase() !== 'all' &&
+                      editingFile.subject.toLowerCase() !== 'all subjects' &&
+                      !validSubjects.some((s) => s.name === editingFile.subject || s.id === editingFile.subject) && (
+                        <option value={editingFile.subject}>{editingFile.subject}</option>
+                      )}
                   </select>
                 </div>
               </div>
@@ -1009,21 +1085,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 )}
               </div>
 
+              {uploadError && (
+                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs text-rose-500 dark:text-rose-300 flex items-center gap-2 font-medium">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
+
               {/* Submit Button */}
               <div className="pt-3 border-t border-[var(--border)] flex flex-col-reverse xs:flex-row justify-end gap-2">
                 <button
                   type="button"
+                  disabled={isSavingUpload}
                   onClick={onClose}
-                  className="w-full xs:w-auto px-4 py-2 rounded-xl border border-[var(--border)] text-xs font-semibold text-[var(--ink-muted)] hover:text-[var(--ink)] bg-[var(--surface)] hover:bg-[var(--surface-higher)] transition cursor-pointer shadow-xs"
+                  className="w-full xs:w-auto px-4 py-2 rounded-xl border border-[var(--border)] text-xs font-semibold text-[var(--ink-muted)] hover:text-[var(--ink)] bg-[var(--surface)] hover:bg-[var(--surface-higher)] transition cursor-pointer shadow-xs disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
+                  disabled={isSavingUpload}
                   id="submit-material-btn"
-                  className="btn btn-primary w-full xs:w-auto justify-center px-5 sm:px-6 py-2 rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
+                  className="btn btn-primary w-full xs:w-auto justify-center px-5 sm:px-6 py-2 rounded-xl text-xs font-bold transition cursor-pointer shadow-xs disabled:opacity-60"
                 >
-                  {editingFile ? 'Save Changes' : 'Publish to Board'}
+                  {isSavingUpload ? 'Publishing...' : editingFile ? 'Save Changes' : 'Publish to Board'}
                 </button>
               </div>
             </form>

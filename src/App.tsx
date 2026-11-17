@@ -13,7 +13,7 @@ import {
   LessonStatus,
   TermType,
 } from './types';
-import { INITIAL_CLASSES, INITIAL_FILES, SUBJECT_CATEGORIES } from './lib/sampleData';
+import { INITIAL_CLASSES, INITIAL_FILES } from './lib/sampleData';
 import {
   fetchClasses,
   saveClass,
@@ -113,7 +113,9 @@ export default function App() {
   const [quizzes, setQuizzes] = useState<QuizItem[]>([]);
   const [homeworkList, setHomeworkList] = useState<HomeworkItem[]>([]);
   const [lessonList, setLessonList] = useState<LessonItem[]>([]);
-  const [subjects, setSubjects] = useState<SubjectCategory[]>(SUBJECT_CATEGORIES);
+  const [subjects, setSubjects] = useState<SubjectCategory[]>([
+    { id: 'all', name: 'All Subjects', color: 'bg-slate-100 text-slate-700' },
+  ]);
 
   // Active top-level Tab: 'files' (Materials) | 'homework' (Homework of the Day) | 'lessons' (Term Lessons) | 'quizzes' (Tests)
   const [activeTab, setActiveTab] = useState<'files' | 'quizzes' | 'homework' | 'lessons'>('files');
@@ -362,7 +364,15 @@ export default function App() {
 
         if (cancelled) return;
 
-        if (subjectsRes.status === 'fulfilled' && subjectsRes.value?.length > 0) setSubjects(subjectsRes.value);
+        if (subjectsRes.status === 'fulfilled' && Array.isArray(subjectsRes.value)) {
+          const loaded = subjectsRes.value;
+          const allItem = loaded.find((s) => s.id === 'all') || {
+            id: 'all',
+            name: 'All Subjects',
+            color: 'bg-slate-100 text-slate-700',
+          };
+          setSubjects([allItem, ...loaded.filter((s) => s.id !== 'all')]);
+        }
         if (classesRes.status === 'fulfilled') setClasses(classesRes.value);
         if (filesRes.status === 'fulfilled') setFiles(filesRes.value);
 
@@ -480,7 +490,12 @@ export default function App() {
   const refreshSubjects = async () => {
     try {
       const dbSubjects = await fetchSubjects();
-      setSubjects(dbSubjects);
+      const allItem = dbSubjects.find((s) => s.id === 'all') || {
+        id: 'all',
+        name: 'All Subjects',
+        color: 'bg-slate-100 text-slate-700',
+      };
+      setSubjects([allItem, ...dbSubjects.filter((s) => s.id !== 'all')]);
     } catch (err) {
       console.error('Error refreshing subjects:', err);
     }
@@ -492,6 +507,7 @@ export default function App() {
       setIsAdmin(false);
       setAdminToken(null);
       setUnlockedClassId(null);
+      setSelectedSubject('all');
       fetchQuizzes({ isStudent: true }).then(setQuizzes).catch(() => {});
       fetchClasses().then(setClasses).catch(() => {});
       showToast('Switched to Student Mode', 'info');
@@ -523,23 +539,25 @@ export default function App() {
     setIsAdmin(true);
     const resolvedName = loggedInName || 'Sudeep Shrestha';
     setAdminName(resolvedName);
+    refreshFiles();
+    refreshSubjects();
     fetchQuizzes({ isStudent: false }).then(setQuizzes).catch(() => {});
     fetchClasses().then(setClasses).catch(() => {});
     showToast(`Welcome, ${resolvedName}! Admin Mode unlocked.`, 'success');
   };
 
-  // Student unlocks specific class
-  const handleUnlockClass = (classId: string, subjectId?: string) => {
+  // Student unlocks specific class (always starts in All Subjects on Materials)
+  const handleUnlockClass = (classId: string) => {
     setIsAdmin(false);
     setAdminToken(null);
     setUnlockedClassId(classId);
     setSelectedClassId(classId);
-    if (subjectId && subjectId !== 'all') {
-      setSelectedSubject(subjectId);
-    } else {
-      setSelectedSubject('all');
-    }
+    setActiveTab('files');
+    setSelectedSubject('all');
     setSearchQuery('');
+    refreshFiles();
+    refreshSubjects();
+    refreshQuizzes();
     try {
       window.history.pushState({ step: 'class', classId }, '', window.location.href);
     } catch {
@@ -553,6 +571,7 @@ export default function App() {
   const handleSwitchClass = () => {
     setUnlockedClassId(null);
     setSelectedClassId('all');
+    setSelectedSubject('all');
     setActiveQuizTaking(null);
     showToast('Returned to class selection.', 'info');
   };
@@ -564,9 +583,10 @@ export default function App() {
       await refreshFiles();
       showToast(`Saved "${savedFile.title}" in database!`);
       setEditingFile(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving file:', err);
-      showToast('Error saving file to database', 'error');
+      showToast(err?.message || 'Error saving file to database', 'error');
+      throw err;
     }
   };
 
@@ -765,28 +785,58 @@ export default function App() {
 
   // Filtering & Sorting Logic for Files (Strictly locked to student's class when student is logged in)
   const filteredFiles = useMemo(() => {
+    const normSel = (selectedSubject || '').trim().toLowerCase();
+    const targetCategory =
+      normSel && normSel !== 'all' && normSel !== 'all subjects'
+        ? subjects.find(
+            (s) =>
+              s.id.trim().toLowerCase() === normSel ||
+              s.name.trim().toLowerCase() === normSel
+          )
+        : undefined;
+    const isAllSubjects =
+      !normSel ||
+      normSel === 'all' ||
+      normSel === 'all subjects' ||
+      targetCategory?.id.trim().toLowerCase() === 'all';
+
     return files.filter((f) => {
+      const fileClassId = (f.classId || '').trim();
+
       // Selected Class filter:
       if (!isAdmin && unlockedClassId) {
-        // Student view: ONLY files matching their unlocked class! Never leak other classes.
-        if (f.classId !== unlockedClassId) {
+        // Student view: show files belonging to their unlocked class (and global 'all' class notices)
+        if (fileClassId !== unlockedClassId && fileClassId !== 'all') {
           return false;
         }
-      } else if (effectiveClassId !== 'all' && f.classId !== effectiveClassId && f.classId !== 'all') {
+      } else if (effectiveClassId !== 'all' && fileClassId !== effectiveClassId && fileClassId !== 'all') {
         return false;
       }
 
-      // Subject filter
-      if (selectedSubject !== 'all' && selectedSubject !== '') {
-        const targetCategory = subjects.find(
-          (s) => s.id === selectedSubject || s.name === selectedSubject
-        );
-        const match =
-          f.subject === selectedSubject ||
-          (targetCategory && (f.subject === targetCategory.name || f.subject === targetCategory.id)) ||
-          f.subject.toLowerCase() === selectedSubject.toLowerCase();
+      // Subject filter:
+      // - 'All Subjects' displays all available notes for the class
+      // - A specific subject displays ONLY notes mapped to that subject category
+      if (!isAllSubjects) {
+        const normFileSub = (f.subject || '').trim().toLowerCase();
+        if (!normFileSub || normFileSub === 'all' || normFileSub === 'all subjects') {
+          return false;
+        }
 
-        if (!match) {
+        const fileCategory = subjects.find(
+          (s) =>
+            s.id.trim().toLowerCase() !== 'all' &&
+            (s.id.trim().toLowerCase() === normFileSub ||
+              s.name.trim().toLowerCase() === normFileSub)
+        );
+
+        const matchesDirect = normFileSub === normSel;
+        const matchesTargetCategory =
+          Boolean(targetCategory) &&
+          (normFileSub === targetCategory!.id.trim().toLowerCase() ||
+            normFileSub === targetCategory!.name.trim().toLowerCase() ||
+            (Boolean(fileCategory) && fileCategory!.id === targetCategory!.id));
+
+        if (!matchesDirect && !matchesTargetCategory) {
           return false;
         }
       }
@@ -794,10 +844,10 @@ export default function App() {
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchesTitle = f.title.toLowerCase().includes(q);
-        const matchesDesc = f.description.toLowerCase().includes(q);
-        const matchesSubject = f.subject.toLowerCase().includes(q);
-        const matchesFileName = f.fileName.toLowerCase().includes(q);
+        const matchesTitle = (f.title || '').toLowerCase().includes(q);
+        const matchesDesc = (f.description || '').toLowerCase().includes(q);
+        const matchesSubject = (f.subject || '').toLowerCase().includes(q);
+        const matchesFileName = (f.fileName || '').toLowerCase().includes(q);
         if (!matchesTitle && !matchesDesc && !matchesSubject && !matchesFileName) {
           return false;
         }
@@ -1024,6 +1074,8 @@ export default function App() {
           handleOpenSubmissions(targetQuiz, studentQuery);
         }}
         initialTab={adminPanelInitialTab}
+        defaultClassId={effectiveClassId}
+        defaultSubject={selectedSubject}
         adminName={adminName}
         onAdminProfileUpdated={(updatedName) => setAdminName(updatedName)}
       />
@@ -1282,7 +1334,6 @@ export default function App() {
       <div className="min-h-screen w-full bg-[var(--bg)] text-[var(--ink)] flex flex-col relative overflow-x-hidden overflow-y-auto font-sans selection:bg-blue-500 selection:text-white transition-colors duration-200">
         <ClassPortal
           classes={classes}
-          subjects={subjects}
           onUnlockClass={handleUnlockClass}
           onOpenAdminLogin={() => setIsPinModalOpen(true)}
           theme={theme}

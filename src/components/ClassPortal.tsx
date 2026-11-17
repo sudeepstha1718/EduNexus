@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ClassItem, SubjectCategory } from '../types';
+import { ClassItem } from '../types';
 import { AnimatedDotMatrix } from './AnimatedDotMatrix';
 import { BackgroundPicker } from './BackgroundPicker';
 import { AppLogo } from './AppLogo';
@@ -27,8 +27,7 @@ import {
 
 interface ClassPortalProps {
   classes: ClassItem[];
-  subjects?: SubjectCategory[];
-  onUnlockClass: (classId: string, subjectId?: string) => void;
+  onUnlockClass: (classId: string) => void;
   onOpenAdminLogin: () => void;
   theme?: 'light' | 'dark';
   onToggleTheme?: () => void;
@@ -36,14 +35,12 @@ interface ClassPortalProps {
 
 export const ClassPortal: React.FC<ClassPortalProps> = ({
   classes,
-  subjects = [],
   onUnlockClass,
   onOpenAdminLogin,
   theme = 'dark',
   onToggleTheme,
 }) => {
   const [selectedClassId, setSelectedClassId] = useState<string>('');
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>('all');
   const [passwordInput, setPasswordInput] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -119,7 +116,7 @@ export const ClassPortal: React.FC<ClassPortalProps> = ({
       setPasswordInput('');
       setLockedUntilMs(0);
       setLockoutSeconds(0);
-      onUnlockClass(selectedClass.id, selectedSubjectId || 'all');
+      onUnlockClass(selectedClass.id);
     } catch (err: any) {
       setPasswordInput('');
       if (err?.retryAfterSeconds && Number(err.retryAfterSeconds) > 0) {
@@ -266,31 +263,6 @@ export const ClassPortal: React.FC<ClassPortalProps> = ({
                       {classes.map((cls) => (
                         <option key={cls.id} value={cls.id} className="bg-[var(--surface)] text-[var(--ink)]">
                           {cls.name} {cls.section ? `(Section ${cls.section})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 absolute right-2.5 xs:right-3 sm:right-4 top-1/2 -translate-y-1/2 text-[var(--ink-muted)] pointer-events-none" />
-                  </div>
-                </div>
-
-                {/* CHOOSE SUBJECT field */}
-                <div className="space-y-0.5 xs:space-y-1 sm:space-y-1.5">
-                  <label className="block text-[9px] xs:text-[10px] sm:text-xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-muted)]">
-                    CHOOSE SUBJECT
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={selectedSubjectId}
-                      onChange={(e) => setSelectedSubjectId(e.target.value)}
-                      id="select-subject-dropdown"
-                      className="w-full bg-[var(--surface-higher)] border border-[var(--border)] text-[var(--ink)] px-2.5 xs:px-3 sm:px-4 py-1.5 xs:py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-sans text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition appearance-none cursor-pointer"
-                    >
-                      <option value="all" className="bg-[var(--surface)] text-[var(--ink)]">
-                        Choose Subject
-                      </option>
-                      {subjects.filter((s) => s.id !== 'all').map((subj) => (
-                        <option key={subj.id} value={subj.id} className="bg-[var(--surface)] text-[var(--ink)]">
-                          {subj.name}
                         </option>
                       ))}
                     </select>

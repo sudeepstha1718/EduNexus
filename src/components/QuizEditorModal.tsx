@@ -140,10 +140,15 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
             : []
         );
       } else {
+        const validSubs = subjects.filter((s) => s.id !== 'all' && s.name.toLowerCase() !== 'all subjects');
         setTitle('');
         setDescription('');
         setClassId(defaultClassId || 'all');
-        setSubject(defaultSubject !== 'all' ? defaultSubject : (subjects[0]?.name || 'Science'));
+        setSubject(
+          defaultSubject && defaultSubject !== 'all' && defaultSubject.toLowerCase() !== 'all subjects'
+            ? defaultSubject
+            : (validSubs[0]?.name || 'General')
+        );
         setTimeLimitMinutes(0);
         setIsPublished(true);
         setQuestions([
@@ -545,11 +550,13 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
                   onChange={(e) => setSubject(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--surface-higher)] border border-[var(--border)] focus:border-blue-500 text-xs sm:text-sm text-[var(--ink)] outline-none cursor-pointer transition shadow-2xs"
                 >
-                  {subjects.map((sub) => (
-                    <option key={sub.id} value={sub.name}>
-                      {sub.name}
-                    </option>
-                  ))}
+                  {subjects
+                    .filter((sub) => sub.id !== 'all' && sub.name.toLowerCase() !== 'all subjects')
+                    .map((sub) => (
+                      <option key={sub.id} value={sub.name}>
+                        {sub.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
